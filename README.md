@@ -7,8 +7,8 @@ API Extensions plugin framework allows writing standalone extensions while takin
 - logging
 - contexts
 
-In addition it comes with prebuild extensions for most common needs.
-(see available extensions: category, product, product_search, surch_suggestions)
+In addition it comes with ready to go extensions for most common needs: \
+\+ [API Extensions table](./docs/api-extensions-table.md)
 
 ## Compatibility
 This cartridge supports compatibility mode of 18.10 and hight.
@@ -24,26 +24,26 @@ This cartridge supports compatibility mode of 18.10 and hight.
 
 ## Configuration
 Configuration is JSON using following format:
-```js
+```
 {
-    clientId: {
-        ExtensionName: {
+    <clientId>: {
+        <ExtensionName>: {
             enabled: bool
-            allowed: bool //(for OCAPI only)
+            allowed: bool
             settings: object
         }
     }
 }
 ```
 There is also a shorthand format:
-```json
+```
 {
-    ExtensionName: true
+    <ExtensionName>: true
 }
 ```
 which equals to
-```json
-    ExtensionName: {
+```js
+    <ExtensionName>: {
         enabled: true,
         allowed: true,
         settings: {}
@@ -56,34 +56,34 @@ Default config key is `_DEFAULT_`
 
 Example config:
 ```json
-
 {
     "_DEFAULT_": {
-		"product": {
-			"OcapiMasterPrices": true
-		}
-	},
+        "product": {
+            "OcapiMasterPrices": true
+        }
+    },
 
-	"00000000-0000-0000-0000-000000000000": {
-		"product_search": {
-			"OcapiPrices": true,
-			"CustomAttributes": {
-				"enabled": true,
+    "00000000-0000-0000-0000-000000000000": {
+        "product_search": {
+            "OcapiPrices": true,
+            "CustomAttributes": {
+                "enabled": true,
                 "allowed": true,
-				"settings": {
-					"attributes": ["isNew", "isSale", "productBadge"]
-				}
-			}
-		}
-	}
+                "settings": {
+                    "attributes": ["isNew", "isSale", "productBadge"]
+                }
+            }
+        }
+    }
 }
 ```
+
 
 ## Usage
 
 ### Control and settings
-OCAPI (and recently SCPI) APIs allow passing custom http parameters.  
-Framework allows clients (if allowed in the site pref - see above) to:
+OCAPI and (now) SCAPI allow passing custom http parameters.  
+Framework allows clients _(if [allowed] in the site pref - see above)_ to:
 - enable endpoint extensions
 - set extension settings
 
@@ -91,28 +91,27 @@ Framework allows clients (if allowed in the site pref - see above) to:
 Pass csv of endpoint extensions to be enabled via ``extensions`` parameter.  
 Example:
 ```
-/dw/shop/v22_4/product_search?q=1G010159&extensions=OcapiPrices,CustomAttributes
+/dw/shop/v22_4/product_search?q=1G010159&c_extensions=OcapiPrices,CustomAttributes
 ```
 
 #### Set extension settings
-Pass settings as JSON using ``{ExtensionName}`` _(or ``c_{ExtensionName}``)_ http parameter.  
+Pass settings as JSON using ``c_{ExtensionName}`` http parameter.  
 Example:
 ```
-...&extensions=CustomAttributes&CustomAttributes={"attributes": ["isNew", "isSale"]}
+...&c_extensions=CustomAttributes&CustomAttributes={"attributes": ["isNew", "isSale"]}
 ```
-```
-...&c_extensions=CustomAttributes&c_CustomAttributes={"attributes": ["isNew", "isSale"]}
-```
+_(i: for OCAPI you can omit "c_" prefix)_
 
 ## Monitoring 
-OOTB SFCC hooks do not have any logging.
+OOTB SFCC hooks do not have any logging.  
 If there is an error / unhandled exception the error is NOT returned nether logged. 
 
-The framework comes with advanced logging that can be used to track both
+The framework adds advanced logging, that can be used to track:
 - errors
 - execution flow
+- debug information
 
-All logs are written in dedicated file:  
+All logs are written in a dedicated file:  
 Prefix: `api-extensions`  
 Group: `api-extensions`  
 _(You might want to enable the debug level during extension development)_
@@ -123,8 +122,8 @@ Errors and warnings are logged also in the common error and warning files.
 
 
 ## Extension Development
-Framework uses conventions that allow transforming simple hook handler to extension.  
-To do so extensions just need to be placed in the correct location:
+Framework uses conventions that allow easy transformation of hook handlers to extensions.  
+To work extensions just need to be placed in the correct location:
 ```
 scripts/hooks/apis/{endpoint}/extensions/{ExtName}.js
 ```  
@@ -132,60 +131,64 @@ scripts/hooks/apis/{endpoint}/extensions/{ExtName}.js
 
 ### Endpoints
 Endpoints should be registered to related hooks  
-See hooks.json and product_search.js endpoint  
+See [`hooks.json`](./cartridges/plugin_apiextensions/hooks.json) and [`product_search.js`](./cartridges/plugin_apiextensions/cartridge/scripts/hooks/apis/product_search.js) endpoint for example.
 
 NOTE: Endpoint naming convention:  
 Endpoints follow the system hook naming.  
-For example product search endpoint is `product_search`: 
+For example Product Search endpoint is `product_search`: 
 ```
-dw.ocapi.shop. product_search .modifyGETRespons
+dw.ocapi.shop.product_search.modifyGETRespons
 ```
-All hook endpoints can be seen here:  
-https://documentation.b2c.commercecloud.salesforce.com/DOC1/topic/com.demandware.dochelp/OCAPI/current/usage/Hooks.html  
+(i) All hook endpoints can be seen here:  
+https://developer.salesforce.com/docs/commerce/commerce-api/guide/hook-method-details.html
 
 
 ### Simple extension
-Extension `OcapiMasterPrice` to extend product resource/endpoint:
+Example of simple extension is [ProductPageUrl](cartridges/plugin_apiextensions/cartridge/scripts/hooks/apis/product/extensions/ProductPageUrl.js).\
+It extends the product resource/endpoint, adding the (SFRA) PDP URL:
 ```
-scripts/hooks/apis/product/extensions/OcapiMasterPrice.js
+scripts/hooks/apis/product/extensions/ProductPageUrl.js
 ```
 
 ### Advanced extension
 
 #### Custom Context Providers
-In some cases you might want to perform actions on subset of the result.  
-For example with product_search, the extensions probably need to operate on searchHit level.  
-If each extension loops through all results and loads related resources (api product) this will be also a performance issue.  
+The problem that framework resolves:
+Sometimes you need an extension working on on diffrent than the default context.
+Typical example are extensions of product_search endpoint, where you usually need to add some data to the search hits rather than modify / work on the searchResult (which is the context you get by the platform):  
+```
+product_search.modifyGETResponse(searchResult)
+```
+In this case if you have 5 separate extensions that add extend the search hit with some data then each extension will have to loop trough the result and re-load the related api Product in order to get additional data. This is not only inconvinient but could be also a performance issue.
 
-I.e.
- - native hook is: `product_search.modifyGETResponse(searchResult)`
- - while extensions needs `product_search.modifyGETResponse(resSearchHit, apiProduct)`
+The framework resolves this by allowing you to create and bind your extension to a Custom Context Provider.\
+For example:
+ - native hook context: `product_search.modifyGETResponse(searchResult)`
+ - custom hook context: `product_search.modifyGETResponse(resSearchHit, apiProduct)`
 
-##### Custom Context Module
-Framework allows to achieve this by introducing custom context providers.
-
-Custom context should:
- - placed in /{endpoint}/contexts/' folder
+##### Creation of Custom Context
+To create custom context provider:
+ - create a js module in `/{endpoint}/contexts/` folder
  - implement js iterator interface and pass expected context (arguments).
 
-Example
+For details see the implementation of the exiting [SearchHitContext](cartridges/plugin_apiextensions/cartridge/scripts/hooks/apis/product_search/contexts/SearchHitContext.js):
 ```
 scripts/hooks/apis/product/contexts/SearchHitContext.js
 ```
 
-##### Custom Context Assignment
-To switch from default to custom context provider
+##### Binding to Custom Context
+There are two ways you can bind your extension to a Custom Context Provider:
 
-a) simple - `context` property  
-add it as `context` property to your even handler function
+a) (declarative) via `contextProvider` property  
+Simply add `contextProvider` property to your hook handler function:
 ```js
-// file: scripts/hooks/apis/product/extensions/OcapiPrices.js
+// file: scripts/hooks/apis/product/extensions/ProductPageUrl.js
 exports.modifyGETResponse = function (resHit, apiProduct) { /*...*/ }
 exports.modifyGETResponse.contextProvider = 'SearchHitContext';
 ```
 
-b) advanced - `ApiExtension` class  
-ApiExtension helper class could add clarity and allows multiple handlers attached on same hook with different contexts
+b) (imperative) via `ApiExtension` object  
+For complex cases / advanced usage ApiExtension helper class could add clarity and allows multiple handlers attached on same hook with different contexts:
 ```js
 // file: scripts/hooks/apis/product/extensions/CustomAttributes.js
 apiExtension.add('modifyGETResponse', function (searchResult) { /*...*/ }
@@ -193,24 +196,19 @@ apiExtension.add('modifyGETResponse', 'SearchHitContext', function (resHit, apiP
 ```
 
 #### Extension Settings
-Extension settings are set in site pref config or custom request param (see above).  
-Runtime settings can be read from the extension using ApiExtenion  
+Extensions allow global or per request configuration 
+(via custom site prefs or request param - see above).  
 
-a) on ApiExtenion instance
-```js
-// file: scripts/hooks/apis/product/extensions/OcapiPrices.js
-apiExtension.runtimeSettings
-```
+Extension runtime (current) settings can be read:
 
-b) static method
+a) using static method:
 ```js
-// file: scripts/hooks/apis/product/extensions/CustomAttributes.js
+// example: scripts/hooks/apis/product/extensions/ProductPageUrl.js
 ApiExtension.GetRuntimeSettings(module)
 ```
 
-
-
-
-
-
-
+b) from a property of `ApiExtenion` instance:
+```js
+// example: scripts/hooks/apis/product/extensions/CustomAttributes.js
+apiExtension.runtimeSettings
+```
